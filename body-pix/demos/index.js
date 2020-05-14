@@ -37,6 +37,8 @@ const state = {
   changingQuantBytes: false,
 };
 
+var backgroudData = [];
+
 function isAndroid() {
   return /Android/i.test(navigator.userAgent);
 }
@@ -57,16 +59,16 @@ async function getVideoInputs() {
 
   const devices = await navigator.mediaDevices.enumerateDevices();
 
-  const videoDevices = devices.filter(device => device.kind === 'videoinput');
+  const videoDevices = devices.filter((device) => device.kind === 'videoinput');
 
   return videoDevices;
 }
 
 function stopExistingVideoCapture() {
   if (state.video && state.video.srcObject) {
-    state.video.srcObject.getTracks().forEach(track => {
+    state.video.srcObject.getTracks().forEach((track) => {
       track.stop();
-    })
+    });
     state.video.srcObject = null;
   }
 }
@@ -164,8 +166,8 @@ const defaultResNetStride = 16;
 const defaultResNetInternalResolution = 'low';
 
 const guiState = {
-  algorithm: 'multi-person-instance',
-  estimate: 'partmap',
+  algorithm: 'person',
+  estimate: 'segmentation',
   camera: null,
   flipHorizontal: true,
   input: {
@@ -173,23 +175,23 @@ const guiState = {
     outputStride: 16,
     internalResolution: 'low',
     multiplier: 0.50,
-    quantBytes: 2
+    quantBytes: 2,
   },
   multiPersonDecoding: {
     maxDetections: 5,
     scoreThreshold: 0.3,
     nmsRadius: 20,
     numKeypointForMatching: 17,
-    refineSteps: 10
+    refineSteps: 10,
   },
   segmentation: {
     segmentationThreshold: 0.7,
     effect: 'mask',
     maskBackground: true,
-    opacity: 0.7,
+    opacity: 1.0,
     backgroundBlurAmount: 3,
-    maskBlurAmount: 0,
-    edgeBlurAmount: 3
+    maskBlurAmount: 8,
+    edgeBlurAmount: 3,
   },
   partMap: {
     colorScale: 'rainbow',
@@ -199,15 +201,15 @@ const guiState = {
     blurBodyPartAmount: 3,
     bodyPartEdgeBlurAmount: 3,
   },
-  showFps: !isMobile()
+  showFps: !isMobile(),
 };
 
 function toCameraOptions(cameras) {
   const result = {default: null};
 
-  cameras.forEach(camera => {
+  cameras.forEach((camera) => {
     result[camera.label] = camera.label;
-  })
+  });
 
   return result;
 }
@@ -220,7 +222,7 @@ function setupGui(cameras) {
 
   let architectureController = null;
   guiState[TRY_RESNET_BUTTON_NAME] = function() {
-    architectureController.setValue('ResNet50')
+    architectureController.setValue('ResNet50');
   };
   gui.add(guiState, TRY_RESNET_BUTTON_NAME).name(TRY_RESNET_BUTTON_TEXT);
   updateTryResNetButtonDatGuiCss();
@@ -337,8 +339,8 @@ function setupGui(cameras) {
           defaultMobileNetInternalResolution,
           ['low', 'medium', 'high', 'full']);
       updateGuiOutputStride(defaultMobileNetStride, [8, 16]);
-      updateGuiMultiplier(defaultMobileNetMultiplier, [0.50, 0.75, 1.0])
-    } else {  // guiState.input.architecture === "ResNet50"
+      updateGuiMultiplier(defaultMobileNetMultiplier, [0.50, 0.75, 1.0]);
+    } else { // guiState.input.architecture === "ResNet50"
       updateGuiInternalResolution(
           defaultResNetInternalResolution, ['low', 'medium', 'high', 'full']);
       updateGuiOutputStride(defaultResNetStride, [32, 16]);
@@ -361,7 +363,7 @@ function setupGui(cameras) {
   });
 
   updateGuiInputSection();
-  input.open()
+  input.open();
 
   const estimateController =
       gui.add(guiState, 'estimate', ['segmentation', 'partmap']);
@@ -385,11 +387,11 @@ function setupGui(cameras) {
 
   algorithmController.onChange(function(value) {
     switch (guiState.algorithm) {
-      case 'single-person':
+      case 'person':
         multiPersonDecoding.close();
         singlePersonDecoding.open();
         break;
-      case 'multi-person':
+      case 'multi-person-instance':
         singlePersonDecoding.close();
         multiPersonDecoding.open();
         break;
@@ -452,7 +454,7 @@ function setupGui(cameras) {
       guiState.partMap, 'effect', ['partMap', 'pixelation', 'blurBodyPart']);
   partMap.add(guiState.partMap, 'opacity', 0.0, 1.0);
   partMap.add(guiState.partMap, 'colorScale', Object.keys(partColorScales))
-      .onChange(colorScale => {
+      .onChange((colorScale) => {
         setShownPartColorScales(colorScale);
       });
   setShownPartColorScales(guiState.partMap.colorScale);
@@ -475,13 +477,13 @@ function setupGui(cameras) {
     }
   });
 
-  gui.add(guiState, 'showFps').onChange(showFps => {
+  gui.add(guiState, 'showFps').onChange((showFps) => {
     if (showFps) {
       document.body.appendChild(stats.dom);
     } else {
       document.body.removeChild(stats.dom);
     }
-  })
+  });
 }
 
 function setShownPartColorScales(colorScale) {
@@ -508,7 +510,7 @@ function setShownPartColorScales(colorScale) {
  * Sets up a frames per second panel on the top-left of the window
  */
 function setupFPS() {
-  stats.showPanel(0);  // 0: fps, 1: ms, 2: mb, 3+: custom
+  stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
   if (guiState.showFps) {
     document.body.appendChild(stats.dom);
   }
@@ -526,7 +528,7 @@ async function estimateSegmentation() {
         nmsRadius: guiState.multiPersonDecoding.nmsRadius,
         numKeypointForMatching:
             guiState.multiPersonDecoding.numKeypointForMatching,
-        refineSteps: guiState.multiPersonDecoding.refineSteps
+        refineSteps: guiState.multiPersonDecoding.refineSteps,
       });
     case 'person':
       return await state.net.segmentPerson(state.video, {
@@ -553,7 +555,7 @@ async function estimatePartSegmentation() {
         nmsRadius: guiState.multiPersonDecoding.nmsRadius,
         numKeypointForMatching:
             guiState.multiPersonDecoding.numKeypointForMatching,
-        refineSteps: guiState.multiPersonDecoding.refineSteps
+        refineSteps: guiState.multiPersonDecoding.refineSteps,
       });
     case 'person':
       return await state.net.segmentPersonParts(state.video, {
@@ -571,7 +573,7 @@ async function estimatePartSegmentation() {
 
 function drawPoses(personOrPersonPartSegmentation, flipHorizontally, ctx) {
   if (Array.isArray(personOrPersonPartSegmentation)) {
-    personOrPersonPartSegmentation.forEach(personSegmentation => {
+    personOrPersonPartSegmentation.forEach((personSegmentation) => {
       let pose = personSegmentation.pose;
       if (flipHorizontally) {
         pose = bodyPix.flipPoseHorizontal(pose, personSegmentation.width);
@@ -580,14 +582,14 @@ function drawPoses(personOrPersonPartSegmentation, flipHorizontally, ctx) {
       drawSkeleton(pose.keypoints, 0.1, ctx);
     });
   } else {
-    personOrPersonPartSegmentation.allPoses.forEach(pose => {
+    personOrPersonPartSegmentation.allPoses.forEach((pose) => {
       if (flipHorizontally) {
         pose = bodyPix.flipPoseHorizontal(
             pose, personOrPersonPartSegmentation.width);
       }
       drawKeypoints(pose.keypoints, 0.1, ctx);
       drawSkeleton(pose.keypoints, 0.1, ctx);
-    })
+    });
   }
 }
 
@@ -597,7 +599,7 @@ async function loadBodyPix() {
     architecture: guiState.input.architecture,
     outputStride: guiState.input.outputStride,
     multiplier: guiState.input.multiplier,
-    quantBytes: guiState.input.quantBytes
+    quantBytes: guiState.input.quantBytes,
   });
   toggleLoadingUI(false);
 }
@@ -634,17 +636,27 @@ function segmentBodyInRealTime() {
         const multiPersonSegmentation = await estimateSegmentation();
         switch (guiState.segmentation.effect) {
           case 'mask':
-            const ctx = canvas.getContext('2d');
-            const foregroundColor = {r: 255, g: 255, b: 255, a: 255};
-            const backgroundColor = {r: 0, g: 0, b: 0, a: 255};
+            // const ctx = canvas.getContext('2d');
+            const canvas_backgroud = document.getElementById("backgroud");
+            const image_backgroud = document.getElementById("source");
+            const ctx = canvas_backgroud.getContext("2d");
+            if (!backgroudData || backgroudData.length <= 0) {
+              const data = ctx.getImageData(0, 0, 640, 480);
+              console.log(data);
+              backgroudData = data.data;
+            }
+            const foregroundColor = {r: 0, g: 0, b: 0, a: 255};
+            const backgroundColor = {r: 0, g: 0, b: 0, a: 0};
+            // toMaskWithBackground
             const mask = bodyPix.toMask(
                 multiPersonSegmentation, foregroundColor, backgroundColor,
-                true);
-
-            bodyPix.drawMask(
+                true); // true
+            ctx.putImageData(mask, 0, 0);
+            // state.video image_backgroud
+            bodyPix.drawMaskEx(
                 canvas, state.video, mask, guiState.segmentation.opacity,
                 guiState.segmentation.maskBlurAmount, flipHorizontally);
-            drawPoses(multiPersonSegmentation, flipHorizontally, ctx);
+            // drawPoses(multiPersonSegmentation, flipHorizontally, ctx);
             break;
           case 'bokeh':
             bodyPix.drawBokehEffect(

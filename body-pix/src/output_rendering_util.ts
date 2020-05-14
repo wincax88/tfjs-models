@@ -191,7 +191,7 @@ export function toMask(
 
   function drawStroke(
       bytes: Uint8ClampedArray, row: number, column: number, width: number,
-      radius: number, color: Color = {r: 0, g: 255, b: 255, a: 255}) {
+      radius: number, color: Color = {r: 255, g: 255, b: 255, a: 255}) {
     for (let i = -radius; i <= radius; i++) {
       for (let j = -radius; j <= radius; j++) {
         if (i !== 0 && j !== 0) {
@@ -613,5 +613,135 @@ export function blurBodyPart(
   // draw the blurred background on top of the original image where it doesn't
   // overlap.
   drawWithCompositing(ctx, blurredImage, 'destination-over');
+  ctx.restore();
+}
+
+export function toMaskWithBackground(
+    personOrPartSegmentation: SemanticPersonSegmentation|
+    SemanticPartSegmentation|PersonSegmentation[]|PartSegmentation[],
+    foreground: Color = {
+      r: 0,
+      g: 0,
+      b: 0,
+      a: 0
+    },
+    background: Uint8ClampedArray,
+    drawContour = false, foregroundIds: number[] = [1]): ImageData {
+  if (Array.isArray(personOrPartSegmentation) &&
+      personOrPartSegmentation.length === 0) {
+    return null;
+  }
+
+  let multiPersonOrPartSegmentation:
+      Array<SemanticPersonSegmentation|SemanticPartSegmentation|
+            PersonSegmentation|PartSegmentation>;
+
+  if (!Array.isArray(personOrPartSegmentation)) {
+    multiPersonOrPartSegmentation = [personOrPartSegmentation];
+  } else {
+    multiPersonOrPartSegmentation = personOrPartSegmentation;
+  }
+
+  const {width, height} = multiPersonOrPartSegmentation[0];
+  const bytes = new Uint8ClampedArray(width * height * 4);
+
+  function drawStroke(
+      bytes: Uint8ClampedArray, row: number, column: number, width: number,
+      radius: number, color: Color = {r: 255, g: 255, b: 255, a: 255}) {
+    for (let i = -radius; i <= radius; i++) {
+      for (let j = -radius; j <= radius; j++) {
+        if (i !== 0 && j !== 0) {
+          const n = (row + i) * width + (column + j);
+          bytes[4 * n + 0] = color.r;
+          bytes[4 * n + 1] = color.g;
+          bytes[4 * n + 2] = color.b;
+          bytes[4 * n + 3] = color.a;
+        }
+      }
+    }
+  }
+
+  function isSegmentationBoundary(
+      segmentationData: Uint8Array|Int32Array,
+      row: number,
+      column: number,
+      width: number,
+      foregroundIds: number[] = [1],
+      radius = 1,
+      ): boolean {
+    let numberBackgroundPixels = 0;
+    for (let i = -radius; i <= radius; i++) {
+      for (let j = -radius; j <= radius; j++) {
+        if (i !== 0 && j !== 0) {
+          const n = (row + i) * width + (column + j);
+          if (!foregroundIds.some(id => id === segmentationData[n])) {
+            numberBackgroundPixels += 1;
+          }
+        }
+      }
+    }
+    return numberBackgroundPixels > 0;
+  }
+
+  for (let i = 0; i < height; i += 1) {
+    for (let j = 0; j < width; j += 1) {
+      const n = i * width + j;
+      bytes[4 * n + 0] = background[4 * n + 0];
+      bytes[4 * n + 1] = background[4 * n + 1];
+      bytes[4 * n + 2] = background[4 * n + 2];
+      bytes[4 * n + 3] = background[4 * n + 3];
+      for (let k = 0; k < multiPersonOrPartSegmentation.length; k++) {
+        if (foregroundIds.some(
+                id => id === multiPersonOrPartSegmentation[k].data[n])) {
+          bytes[4 * n] = foreground.r;
+          bytes[4 * n + 1] = foreground.g;
+          bytes[4 * n + 2] = foreground.b;
+          bytes[4 * n + 3] = foreground.a;
+          const isBoundary = isSegmentationBoundary(
+              multiPersonOrPartSegmentation[k].data, i, j, width,
+              foregroundIds);
+          if (drawContour && i - 1 >= 0 && i + 1 < height && j - 1 >= 0 &&
+              j + 1 < width && isBoundary) {
+            drawStroke(bytes, i, j, width, 1);
+          }
+        }
+      }
+    }
+  }
+
+  return new ImageData(bytes, width, height);
+}
+
+export function drawMaskEx(
+    canvas: HTMLCanvasElement, image: ImageType, maskImage: ImageData|null,
+    maskOpacity = 0.7, maskBlurAmount = 0, flipHorizontal = false) {
+  const [height, width] = getInputSize(image);
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  if (flipHorizontal) {
+    flipCanvasHorizontal(canvas);
+  }
+
+  // ctx.drawImage(mask, 0, 0, width, height);
+  // ctx.globalCompositeOperation = 'source-in';
+  // ctx.drawImage(img, 0, 0);
+
+  // ctx.drawImage(image, 0, 0);
+
+  ctx.globalAlpha = maskOpacity;
+  if (maskImage) {
+    assertSameDimensions({width, height}, maskImage, 'image', 'mask');
+
+    const mask = renderImageDataToOffScreenCanvas(maskImage, CANVAS_NAMES.mask);
+
+    const blurredMask = drawAndBlurImageOnOffScreenCanvas(
+        mask, maskBlurAmount, CANVAS_NAMES.blurredMask);
+    ctx.drawImage(blurredMask, 0, 0, width, height);
+  }
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.drawImage(image, 0, 0);
   ctx.restore();
 }

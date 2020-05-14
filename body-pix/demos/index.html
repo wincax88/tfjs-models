@@ -112,6 +112,16 @@
         overflow: hidden;
       }
     }
+    .backgroud {
+      float: left;
+      width: 640px;
+      height: 480px;
+      display: none;
+    }
+    #output {
+      width: 640px;
+      height: 480px;
+    }
   </style>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -130,11 +140,12 @@
   </div>
   <div id='main' style='display:none'>
     <video id="video" playsinline style="display: none;"></video>
-    <canvas id="output">
+    <canvas id="output" style="background-image: url(./background.jpg); background-size: 640px 480px;">
   </div>
   <ul id="colors" style="display: none"></ul>
-  <div class="footer">
+  <div class="footer" >
     <div class="footer-text">
+
       <p>
         The BodyPix model can estimate which pixels in an image are part of a person, and which pixels
         are part of each of 24 body parts. It works for <strong>multiple people</strong> in an input image or video.
@@ -149,14 +160,39 @@
       </p>
     </div>
 
-    <div class="footer-menu">
+    <div class="footer-menu" >
       <i class="material-icons switch-camera">switch_camera</i>
       <i class="material-icons mask mode active">portrait</i>
       <i class="material-icons mode bokeh">blur_on</i>
       <i class="material-icons mode part-map">format_color_fill</i>
       <i class="material-icons high-accuracy">high_quality</i>
     </div>
+    <div style="display:none;">
+      <img id="source"
+           src="./background.jpg"
+           width="640" height="480">
+    </div>
+    <canvas id="backgroud" class="backgroud"></canvas>
   </div>
+
+  <script>
+    // var imageData = [];
+    const image = document.getElementById('source');
+
+    image.addEventListener('load', e => {
+      const canvas = document.getElementById("backgroud");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = 640;
+      canvas.height = 480;
+      ctx.drawImage(image, 0, 0, 640, 480);
+    });
+    // window.onload = function() {
+    //   window.setTimeout(function() {
+    //
+    //   }, 1000);
+    // };
+  </script>
   <script src="index.js"></script>
 </body>
 
